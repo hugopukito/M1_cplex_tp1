@@ -101,9 +101,28 @@ int TP1_solve_exact(dataSet* dsptr)
 	}
 
 
-	/********************************************/
-	/******* FILL HERE FOR VARIABLES x_ij *******/
-	/********************************************/
+	for( i = 0 ; i < n ; i++) {
+		for( j = 0 ; j < n; j++) { 
+			
+		
+			//We keep the id
+			id_x_ij[i][j]  = id;
+
+			//We generate the variable attributes
+			ip_prob_ptr->x[id] = 0;
+			ip_prob_ptr->cost[id] = 0;
+			ip_prob_ptr->c_type[id] = 'B';
+			ip_prob_ptr->up_bound[id] = 1;
+			ip_prob_ptr->low_bound[id] = 0;
+			ip_prob_ptr->var_name[id] = (char*)malloc(sizeof(char)*1024);
+				snprintf(       ip_prob_ptr->var_name[id],
+								1024,
+								"x_i%d_j%d",
+								i,j);
+			id++;
+		}
+	} 
+		
 
 
 
@@ -174,9 +193,39 @@ int TP1_solve_exact(dataSet* dsptr)
 	}
 
 
-	/****************FILL HERE*******************/
-	/*****Each item must be in exactly one bin***/
-	/********************************************/
+	ip_prob_ptr->rhs[0] = 1;
+	ip_prob_ptr->sense[0] = 'E';
+	for( j = 0 ; j < n ; j++)
+	{
+		//Constraint name
+	        snprintf(       ip_prob_ptr->const_name[0],
+        	                1024,
+                	        "item_j%d",
+                        	j);
+		id=0;
+		
+		//variables x_ij coefficients
+		for( i = 0 ; i < n ; i++)
+		{
+		        ip_prob_ptr->rmatind[id] = id_x_ij[i][j];//recup id i j
+        		ip_prob_ptr->rmatval[id] =  1;//recup taille variables
+			id++;
+		}
+		rval = CPXaddrows( ip_prob_ptr->env, ip_prob_ptr->lp,//ajoute une ligne 
+			0,//No new column
+			1,//One new row
+			n,//Number of nonzero coefficients
+			ip_prob_ptr->rhs, 
+			ip_prob_ptr->sense, 
+			ip_prob_ptr->rmatbeg, 
+			ip_prob_ptr->rmatind, 
+			ip_prob_ptr->rmatval,
+			NULL,//No new column
+			ip_prob_ptr->const_name );
+		if(rval)
+			fprintf(stderr,"CPXaddrows returned errcode %d\n",rval);
+
+	}	
 
 
 	//We write the problem for debugging purposes, can be commented afterwards
@@ -237,6 +286,7 @@ int TP1_solve_exact(dataSet* dsptr)
 
 int TP1_solve_heuristic(dataSet* dsptr)
 {
+	printf("\n");
 	printf("------heuristic------\n");
 	printf("\n");
 
@@ -252,12 +302,17 @@ int TP1_solve_heuristic(dataSet* dsptr)
 	// structure de boîtes
 	typedef struct bin {
 		int *array;
+
+		// addition des éléments de la boîte
 		int size;
+
+		// nombre d'éléments de notre boîte
 		int nbelt;
 	} bin;
 
 	bin* bins = malloc(n * sizeof(bins));
 
+	// initialisation de notre tableau de boîtes
 	for (int i=0; i<n; i++) {
 		bins[i].array = malloc(n * sizeof(int));
 		bins[i].size = 0;
@@ -420,7 +475,7 @@ int TP1_solve_heuristic(dataSet* dsptr)
 	printf("\n");
 
 	// nouvelles boîtes
-	bin* bins3 = malloc(n * sizeof(bins3));
+	bin* bins3 = malloc((n*n) * sizeof(bins3));
 
 	for (int i=0; i<n; i++) {
 		bins3[i].array = malloc(n * sizeof(int));
@@ -441,7 +496,7 @@ int TP1_solve_heuristic(dataSet* dsptr)
 		int bestBin = 0;
 
 		// meilleur différence valeur/tailleBoite
-		int bestFit = V;
+		int bestFit = 0;
 
 		// parcours les struct de boîtes une par une
 		for (int j=0; j<n; j++) {
@@ -450,8 +505,9 @@ int TP1_solve_heuristic(dataSet* dsptr)
 			if (array[i] + bins3[j].size <= V) {
 
 				// si on trouve un bestFit
-				if (bins3[j].size - array[i] <= bestFit) {
+				if (bins3[j].size + array[i] >= bestFit) {
 					bestBin = j;
+					bestFit = bins3[j].size + array[i];
 				} 
 			}
 		} 
@@ -496,6 +552,8 @@ int TP1_solve_heuristic(dataSet* dsptr)
 			cpt++;
 		} 
 	}
+
+	printf("\n");
 
 	return 0;
 }
